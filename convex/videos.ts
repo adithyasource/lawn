@@ -131,7 +131,7 @@ export const getByPublicId = query({
       .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
       .unique();
 
-    if (!video || video.visibility !== "public" || video.status !== "ready") {
+    if (!video || video.visibility !== "public") {
       return null;
     }
 
@@ -146,6 +146,7 @@ export const getByPublicId = query({
         muxPlaybackId: video.muxPlaybackId,
         contentType: video.contentType,
         s3Key: video.s3Key,
+        status: video.status,
       },
     };
   },
@@ -202,7 +203,7 @@ export const getByShareGrant = query({
     }
 
     const video = await ctx.db.get(resolved.shareLink.videoId);
-    if (!video || video.status !== "ready") {
+    if (!video) {
       return null;
     }
 
@@ -217,6 +218,7 @@ export const getByShareGrant = query({
         muxPlaybackId: video.muxPlaybackId,
         contentType: video.contentType,
         s3Key: video.s3Key,
+        status: video.status,
       },
       grantExpiresAt: resolved.grant.expiresAt,
     };

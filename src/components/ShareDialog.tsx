@@ -40,8 +40,8 @@ interface ShareDialogProps {
 }
 
 export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
-  const video = useQuery(api.videos.get, { videoId });
-  const shareLinks = useQuery(api.shareLinks.list, { videoId });
+  const video = useQuery(api.videos.get, open && videoId ? { videoId } : "skip");
+  const shareLinks = useQuery(api.shareLinks.list, open && videoId ? { videoId } : "skip");
   const createShareLink = useMutation(api.shareLinks.create);
   const deleteShareLink = useMutation(api.shareLinks.remove);
   const setVisibility = useMutation(api.videos.setVisibility);

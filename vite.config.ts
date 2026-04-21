@@ -25,11 +25,6 @@ export default defineConfig({
       },
       pages: [
         { path: "/" },
-        { path: "/compare/frameio" },
-        { path: "/compare/wipster" },
-        { path: "/for/video-editors" },
-        { path: "/for/agencies" },
-        { path: "/pricing" },
       ],
     }),
     viteReact(),

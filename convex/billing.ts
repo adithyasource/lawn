@@ -17,7 +17,16 @@ import {
 } from "./billingHelpers";
 
 const stripeClient = new StripeSubscriptions(components.stripe, {});
-const stripe = new Stripe(stripeClient.apiKey);
+// Only initialize Stripe if API key is present to avoid deployment analysis errors
+let stripe: Stripe | null = null;
+try {
+  if (stripeClient.apiKey) {
+    stripe = new Stripe(stripeClient.apiKey);
+  }
+} catch (e) {
+  // Ignore error during analysis if API key is missing
+}
+
 const TEAM_TRIAL_DAYS = 7;
 const PLAN_RANK = {
   basic: 0,
@@ -44,88 +53,7 @@ export const createSubscriptionCheckout = action({
     url: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args): Promise<{ sessionId: string; url: string | null }> => {
-    const identity = await getIdentity(ctx);
-    const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
-
-    if (!team) {
-      throw new Error("Team not found");
-    }
-
-    if (team.role !== "owner") {
-      throw new Error("Only team owners can manage billing.");
-    }
-
-    const existingSubscription = await ctx.runQuery(
-      components.stripe.public.getSubscriptionByOrgId,
-      { orgId: args.teamId },
-    );
-
-    if (existingSubscription && hasActiveTeamSubscriptionStatus(existingSubscription.status)) {
-      throw new Error(
-        "This team already has an active subscription. Use the billing portal to manage it.",
-      );
-    }
-
-    let stripeCustomerId: string | undefined =
-      team.stripeCustomerId ?? existingSubscription?.stripeCustomerId;
-
-    if (!stripeCustomerId) {
-      const userEmail =
-        typeof identity.email === "string" && identity.email.length > 0
-          ? identity.email
-          : undefined;
-      const customer = await stripeClient.createCustomer(ctx, {
-        email: userEmail,
-        name: team.name,
-        metadata: {
-          orgId: team._id,
-          userId: identity.subject,
-          teamSlug: team.slug,
-        },
-        idempotencyKey: team._id,
-      });
-      stripeCustomerId = customer.customerId;
-
-      await ctx.runMutation(internal.teams.linkStripeCustomer, {
-        teamId: team._id,
-        stripeCustomerId,
-      });
-    }
-
-    const stripePriceId = getStripePriceIdForPlan(args.plan);
-
-    const shouldStartTrial =
-      !existingSubscription && !team.stripeSubscriptionId;
-
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      mode: "subscription",
-      line_items: [{ price: stripePriceId, quantity: 1 }],
-      success_url: args.successUrl,
-      cancel_url: args.cancelUrl,
-      metadata: {
-        orgId: team._id,
-        plan: args.plan,
-      },
-      subscription_data: {
-        metadata: {
-          orgId: team._id,
-          userId: identity.subject,
-          plan: args.plan,
-          teamSlug: team.slug,
-        },
-        ...(shouldStartTrial ? { trial_period_days: TEAM_TRIAL_DAYS } : {}),
-      },
-    };
-
-    if (stripeCustomerId) {
-      sessionParams.customer = stripeCustomerId;
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionParams);
-    return {
-      sessionId: session.id,
-      url: session.url,
-    };
+    throw new Error("Billing is disabled for this installation.");
   },
 });
 
@@ -138,32 +66,7 @@ export const createCustomerPortalSession = action({
     url: v.string(),
   }),
   handler: async (ctx, args): Promise<{ url: string }> => {
-    const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
-
-    if (!team) {
-      throw new Error("Team not found");
-    }
-
-    if (team.role !== "owner") {
-      throw new Error("Only team owners can manage billing.");
-    }
-
-    const existingSubscription = await ctx.runQuery(
-      components.stripe.public.getSubscriptionByOrgId,
-      { orgId: args.teamId },
-    );
-
-    const stripeCustomerId =
-      team.stripeCustomerId ?? existingSubscription?.stripeCustomerId;
-
-    if (!stripeCustomerId) {
-      throw new Error("No Stripe customer found for this team yet.");
-    }
-
-    return await stripeClient.createCustomerPortalSession(ctx, {
-      customerId: stripeCustomerId,
-      returnUrl: args.returnUrl,
-    });
+    throw new Error("Billing is disabled for this installation.");
   },
 });
 
@@ -180,103 +83,7 @@ export const updateTeamSubscriptionPlan = action({
     ctx,
     args,
   ): Promise<{ plan: TeamPlan; subscriptionStatus: string }> => {
-    const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
-
-    if (!team) {
-      throw new Error("Team not found");
-    }
-
-    if (team.role !== "owner") {
-      throw new Error("Only team owners can manage billing.");
-    }
-
-    const existingSubscription = await ctx.runQuery(
-      components.stripe.public.getSubscriptionByOrgId,
-      { orgId: args.teamId },
-    );
-
-    const stripeSubscriptionId =
-      existingSubscription?.stripeSubscriptionId ?? team.stripeSubscriptionId;
-
-    if (!stripeSubscriptionId) {
-      throw new Error("No active subscription found for this team.");
-    }
-
-    const stripePriceId = getStripePriceIdForPlan(args.plan);
-    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-
-    if (!hasActiveTeamSubscriptionStatus(subscription.status)) {
-      throw new Error("Only active subscriptions can be upgraded.");
-    }
-
-    const currentItem = subscription.items.data[0];
-
-    if (!currentItem) {
-      throw new Error("Subscription has no items.");
-    }
-
-    const currentPlan =
-      resolvePlanFromStripePriceId(currentItem.price.id) ??
-      resolvePlanFromStripePriceId(existingSubscription?.priceId) ??
-      normalizeStoredTeamPlan(team.plan);
-
-    if (args.plan === currentPlan) {
-      throw new Error(`This team is already on ${args.plan}.`);
-    }
-
-    if (PLAN_RANK[args.plan] <= PLAN_RANK[currentPlan]) {
-      throw new Error("Use the billing portal to downgrade this subscription.");
-    }
-
-    const updatedSubscription = await stripe.subscriptions.update(
-      stripeSubscriptionId,
-      {
-        items: [
-          {
-            id: currentItem.id,
-            price: stripePriceId,
-            quantity: currentItem.quantity ?? 1,
-          },
-        ],
-        metadata: {
-          ...subscription.metadata,
-          orgId: team._id,
-          plan: args.plan,
-          teamSlug: team.slug,
-        },
-        proration_behavior: "create_prorations",
-      },
-    );
-
-    const updatedItem = updatedSubscription.items.data[0];
-    const updatedPriceId = updatedItem?.price?.id ?? stripePriceId;
-
-    await ctx.runMutation(components.stripe.private.handleSubscriptionUpdated, {
-      stripeSubscriptionId: updatedSubscription.id,
-      status: updatedSubscription.status,
-      currentPeriodEnd: updatedItem?.current_period_end ?? 0,
-      cancelAtPeriodEnd: updatedSubscription.cancel_at_period_end ?? false,
-      cancelAt: updatedSubscription.cancel_at ?? undefined,
-      quantity: updatedItem?.quantity ?? 1,
-      priceId: updatedPriceId,
-      metadata: updatedSubscription.metadata ?? {},
-    });
-
-    await ctx.runMutation(internal.billing.syncTeamSubscriptionFromWebhook, {
-      orgId: team._id,
-      stripeCustomerId:
-        typeof updatedSubscription.customer === "string"
-          ? updatedSubscription.customer
-          : undefined,
-      stripeSubscriptionId: updatedSubscription.id,
-      stripePriceId: updatedPriceId,
-      status: updatedSubscription.status,
-    });
-
-    return {
-      plan: args.plan,
-      subscriptionStatus: updatedSubscription.status,
-    };
+    throw new Error("Billing is disabled for this installation.");
   },
 });
 

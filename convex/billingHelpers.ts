@@ -74,14 +74,13 @@ export async function getTeamSubscriptionState(
     throw new Error("Team not found");
   }
 
-  const subscription = await getTeamSubscriptionByOrgId(ctx, teamId);
-  const subscriptionPlan = resolvePlanFromStripePriceId(subscription?.priceId);
-  const plan = subscriptionPlan ?? normalizeStoredTeamPlan(team.plan);
-  const hasActiveSubscription = hasActiveTeamSubscriptionStatus(
-    subscription?.status,
-  );
-
-  return { team, subscription, plan, hasActiveSubscription };
+  // FORCE PRO PLAN FOR SINGLE USER INSTALL
+  return {
+    team,
+    subscription: null as Awaited<ReturnType<typeof getTeamSubscriptionByOrgId>>,
+    plan: "pro" as const,
+    hasActiveSubscription: true,
+  };
 }
 
 export async function getTeamStorageUsedBytes(

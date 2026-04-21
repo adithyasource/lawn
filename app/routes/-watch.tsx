@@ -242,7 +242,9 @@ export default function WatchPage() {
               <div className="flex flex-col items-center gap-3 text-white">
                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
                  <p className="text-sm font-medium text-white/85">
-                   {playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
+                   {video.status === "processing" || video.status === "uploading"
+                     ? "Video is still processing. Please wait..."
+                     : (playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream..."))}
                  </p>
               </div>
             </div>

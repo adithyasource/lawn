@@ -21,7 +21,7 @@ import {
 import { BUCKET_NAME, getS3Client } from "./s3";
 
 const GIBIBYTE = 1024 ** 3;
-const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 5 * GIBIBYTE;
+const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 50 * GIBIBYTE;
 const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
   "video/mp4",
   "video/quicktime",

@@ -67,7 +67,29 @@ function AppShell({ children }: { children: ReactNode }) {
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
   if (!publishableKey) {
-    throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#f0f0e8] p-8 text-[#1a1a1a] font-sans">
+        <div className="max-w-md w-full border-2 border-[#1a1a1a] p-8 bg-white shadow-[8px_8px_0px_0px_rgba(26,26,26,1)]">
+          <h1 className="text-2xl font-black uppercase tracking-tight mb-4">Setup Required</h1>
+          <p className="mb-6 leading-relaxed">
+            Missing <code className="bg-gray-100 px-1 font-mono text-sm">VITE_CLERK_PUBLISHABLE_KEY</code>.
+          </p>
+          <p className="mb-6 text-sm text-[#888888]">
+            Please add your Clerk publishable key to <code className="bg-gray-100 px-1 font-mono text-xs">.env.local</code> to continue.
+          </p>
+          <div className="border-t-2 border-[#1a1a1a] pt-6">
+            <a 
+              href="https://dashboard.clerk.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block bg-[#2d5a2d] text-[#f0f0e8] px-6 py-3 font-bold uppercase tracking-wide hover:bg-[#3a6a3a] transition-colors"
+            >
+              Get Clerk Key
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
