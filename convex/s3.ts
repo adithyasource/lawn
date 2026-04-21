@@ -43,6 +43,6 @@ export function getS3Client(): S3Client {
       secretAccessKey,
     },
     // R2 requires path-style requests for the standard <accountid>.r2.cloudflarestorage.com endpoint
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== \"false\",
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
     });
 }
